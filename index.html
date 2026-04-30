@@ -3,47 +3,283 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hello GitHub Pages</title>
+  <title>Supabase CRUD 测试</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #0f172a;
+      color: #e2e8f0;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      color: #fff;
-    }
-    .container {
-      text-align: center;
       padding: 2rem;
     }
-    h1 {
-      font-size: 3rem;
+    .container { max-width: 640px; margin: 0 auto; }
+    h1 { font-size: 1.75rem; margin-bottom: 1.5rem; color: #38bdf8; }
+
+    .setup {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+    .setup summary { cursor: pointer; font-weight: 600; color: #fbbf24; }
+    .setup pre {
+      background: #0f172a;
+      padding: 0.75rem;
+      border-radius: 6px;
+      margin-top: 0.5rem;
+      overflow-x: auto;
+    }
+
+    .input-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    input[type="text"] {
+      flex: 1;
+      padding: 0.625rem 0.875rem;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 0.9375rem;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: #38bdf8; }
+
+    .btn {
+      padding: 0.625rem 1.25rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.9375rem;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: #38bdf8; color: #0f172a; }
+    .btn-sm { padding: 0.375rem 0.75rem; font-size: 0.8125rem; }
+    .btn-edit { background: #fbbf24; color: #0f172a; }
+    .btn-del { background: #f87171; color: #fff; }
+    .btn-save { background: #34d399; color: #0f172a; }
+    .btn-cancel { background: #475569; color: #fff; }
+
+    .status {
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
       margin-bottom: 1rem;
-      text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      font-size: 0.8125rem;
     }
-    p {
-      font-size: 1.25rem;
-      opacity: 0.9;
-      margin-bottom: 2rem;
+    .status-ok { background: #065f46; color: #6ee7b7; }
+    .status-err { background: #7f1d1d; color: #fca5a5; }
+    .status-info { background: #1e3a5f; color: #93c5fd; }
+
+    .list { list-style: none; }
+    .list li {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.625rem 0.75rem;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      margin-bottom: 0.375rem;
     }
-    .badge {
-      display: inline-block;
-      padding: 0.5rem 1.5rem;
-      background: rgba(255,255,255,0.2);
-      border-radius: 2rem;
-      font-size: 0.9rem;
-      backdrop-filter: blur(10px);
+    .list li .text { flex: 1; }
+    .list li .edit-input {
+      flex: 1;
+      padding: 0.375rem 0.5rem;
+      background: #0f172a;
+      border: 1px solid #38bdf8;
+      border-radius: 4px;
+      color: #e2e8f0;
+      font-size: 0.875rem;
+      outline: none;
     }
+    .actions { display: flex; gap: 0.375rem; }
+    .empty { text-align: center; padding: 2rem; color: #64748b; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Hello GitHub Pages!</h1>
-    <p>部署成功，这是一个公网可访问的网页。</p>
-    <span class="badge">Deployed with GitHub Pages</span>
+    <h1>Supabase CRUD 测试</h1>
+
+    <details class="setup">
+      <summary>首次使用：点击展开建表 SQL</summary>
+      <p style="margin-top:0.5rem">在 Supabase 控制台 &rarr; SQL Editor 中执行以下 SQL：</p>
+      <pre>CREATE TABLE todos (
+  id BIGSERIAL PRIMARY KEY,
+  text TEXT NOT NULL,
+  done BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE todos ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public read" ON todos FOR SELECT USING (true);
+CREATE POLICY "Public insert" ON todos FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public update" ON todos FOR UPDATE USING (true);
+CREATE POLICY "Public delete" ON todos FOR DELETE USING (true);</pre>
+    </details>
+
+    <div id="status" class="status status-info">正在连接 Supabase...</div>
+
+    <div class="input-row">
+      <input type="text" id="todoInput" placeholder="输入待办事项..." />
+      <button class="btn btn-primary" onclick="addTodo()">添加</button>
+    </div>
+
+    <ul id="todoList" class="list"></ul>
   </div>
+
+  <script>
+    const SUPABASE_URL = 'https://fsnjzqqatsnpwtqqksqf.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_jxmK0pgL0QlCp1WhD7mC8w_rE-QsoXI';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const statusEl = document.getElementById('status');
+    const listEl = document.getElementById('todoList');
+    const inputEl = document.getElementById('todoInput');
+
+    function setStatus(msg, type) {
+      statusEl.textContent = msg;
+      statusEl.className = 'status status-' + type;
+    }
+
+    function escapeAttr(s) {
+      return s.replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // --- Read ---
+    async function loadTodos() {
+      const { data, error } = await supabase
+        .from('todos')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        setStatus('查询失败: ' + error.message, 'err');
+        return [];
+      }
+      setStatus('已连接，共 ' + data.length + ' 条记录', 'ok');
+      return data;
+    }
+
+    function render(todos) {
+      listEl.textContent = '';
+      if (!todos.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = '暂无数据，添加一条试试';
+        listEl.appendChild(empty);
+        return;
+      }
+
+      todos.forEach(function(t) {
+        var li = document.createElement('li');
+        li.setAttribute('data-id', t.id);
+
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = t.done;
+        cb.addEventListener('change', function() { toggleDone(t.id, cb.checked); });
+        li.appendChild(cb);
+
+        var span = document.createElement('span');
+        span.className = 'text';
+        span.textContent = t.text;
+        if (t.done) {
+          span.style.textDecoration = 'line-through';
+          span.style.opacity = '0.5';
+        }
+        li.appendChild(span);
+
+        var actions = document.createElement('div');
+        actions.className = 'actions';
+
+        var editBtn = document.createElement('button');
+        editBtn.className = 'btn btn-sm btn-edit';
+        editBtn.textContent = '编辑';
+        editBtn.addEventListener('click', function() { startEdit(li, t.id, t.text); });
+        actions.appendChild(editBtn);
+
+        var delBtn = document.createElement('button');
+        delBtn.className = 'btn btn-sm btn-del';
+        delBtn.textContent = '删除';
+        delBtn.addEventListener('click', function() { deleteTodo(t.id); });
+        actions.appendChild(delBtn);
+
+        li.appendChild(actions);
+        listEl.appendChild(li);
+      });
+    }
+
+    // --- Create ---
+    async function addTodo() {
+      var text = inputEl.value.trim();
+      if (!text) return;
+      inputEl.value = '';
+      var result = await supabase.from('todos').insert({ text: text });
+      if (result.error) return setStatus('添加失败: ' + result.error.message, 'err');
+      refresh();
+    }
+
+    inputEl.addEventListener('keydown', function(e) { if (e.key === 'Enter') addTodo(); });
+
+    // --- Update ---
+    async function toggleDone(id, done) {
+      var result = await supabase.from('todos').update({ done: done }).eq('id', id);
+      if (result.error) return setStatus('更新失败: ' + result.error.message, 'err');
+      refresh();
+    }
+
+    function startEdit(li, id, currentText) {
+      li.textContent = '';
+      var input = document.createElement('input');
+      input.className = 'edit-input';
+      input.value = currentText;
+      li.appendChild(input);
+
+      var actions = document.createElement('div');
+      actions.className = 'actions';
+
+      var saveBtn = document.createElement('button');
+      saveBtn.className = 'btn btn-sm btn-save';
+      saveBtn.textContent = '保存';
+      saveBtn.addEventListener('click', function() { saveEdit(id, input.value.trim()); });
+      actions.appendChild(saveBtn);
+
+      var cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn btn-sm btn-cancel';
+      cancelBtn.textContent = '取消';
+      cancelBtn.addEventListener('click', function() { refresh(); });
+      actions.appendChild(cancelBtn);
+
+      li.appendChild(actions);
+      input.focus();
+    }
+
+    async function saveEdit(id, text) {
+      if (!text) return;
+      var result = await supabase.from('todos').update({ text: text }).eq('id', id);
+      if (result.error) return setStatus('更新失败: ' + result.error.message, 'err');
+      refresh();
+    }
+
+    // --- Delete ---
+    async function deleteTodo(id) {
+      var result = await supabase.from('todos').delete().eq('id', id);
+      if (result.error) return setStatus('删除失败: ' + result.error.message, 'err');
+      refresh();
+    }
+
+    async function refresh() {
+      var todos = await loadTodos();
+      render(todos);
+    }
+
+    refresh();
+  </script>
 </body>
 </html>
