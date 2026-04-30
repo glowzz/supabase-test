@@ -136,7 +136,9 @@ CREATE POLICY "Public delete" ON todos FOR DELETE USING (true);</pre>
   <script>
     const SUPABASE_URL = 'https://fsnjzqqatsnpwtqqksqf.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_jxmK0pgL0QlCp1WhD7mC8w_rE-QsoXI';
-    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } }
+    });
 
     const statusEl = document.getElementById('status');
     const listEl = document.getElementById('todoList');
